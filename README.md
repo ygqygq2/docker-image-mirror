@@ -7,3 +7,6 @@ k8s.gcr.io/metrics-server-amd64:v0.3.1
 
 ## tiller
 gcr.io/kubernetes-helm/tiller:v2.8.1
+
+## elasticsearch
+docker.elastic.co/elasticsearch/elasticsearch:5.6.16
