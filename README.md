@@ -3,10 +3,13 @@ docker纯翻墙
 
 ## kubernetes docker
 * [metrics-server](https://github.com/kubernetes-incubator/metrics-server)
-k8s.gcr.io/metrics-server-amd64:v0.3.1
+k8s.gcr.io/metrics-server-amd64
 
 ## tiller
-gcr.io/kubernetes-helm/tiller:v2.8.1
+gcr.io/kubernetes-helm/tiller
 
 ## elasticsearch
-docker.elastic.co/elasticsearch/elasticsearch:5.6.16
+docker.elastic.co/elasticsearch/elasticsearch
+
+## hyperkube
+k8s.gcr.io/hyperkube:v1.7.12
