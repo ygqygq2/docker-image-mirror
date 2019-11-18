@@ -12,4 +12,7 @@ gcr.io/kubernetes-helm/tiller
 docker.elastic.co/elasticsearch/elasticsearch
 
 ## hyperkube
-k8s.gcr.io/hyperkube:v1.7.12
+k8s.gcr.io/hyperkube
+
+## metrics-server
+gcr.io/google_containers/metrics-server-amd64
