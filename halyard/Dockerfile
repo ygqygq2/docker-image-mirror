@@ -1,4 +1,4 @@
-FROM gcr.io/spinnaker-marketplace/halyard:1.20.2
+FROM gcr.io/spinnaker-marketplace/halyard:1.23.2
 
 LABEL maintainer "29ygq@sina.com"
 
