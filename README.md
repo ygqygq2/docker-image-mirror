@@ -16,3 +16,6 @@ k8s.gcr.io/hyperkube
 
 ## metrics-server
 gcr.io/google_containers/metrics-server-amd64
+
+## halyard
+gcr.io/spinnaker-marketplace/halyard
