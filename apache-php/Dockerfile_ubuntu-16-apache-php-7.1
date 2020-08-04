@@ -3,5 +3,5 @@ FROM 1and1internet/ubuntu-16-apache-php-7.1:575
 LABEL maintainer "29ygq@sina.com"
 
 RUN apt update \
-  && apt install git-all \
+  && apt -y install git-all \
   && rm -rf /var/cache/apk/*
