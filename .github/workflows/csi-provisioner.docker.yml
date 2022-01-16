@@ -33,11 +33,11 @@ jobs:
           images: |
             ghcr.io/${{ github.repository }}/csi-provisioner
 
-      - name: Build and push csi-provisionerr Docker images
+      - name: Build and push csi-provisioner Docker images
         uses: docker/build-push-action@v2
         with:
           context: ./sig-storage
-          file: ./sig-storage/csi-provisionerr.Dockerfile
+          file: ./sig-storage/csi-provisioner.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

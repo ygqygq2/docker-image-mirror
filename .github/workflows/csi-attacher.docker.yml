@@ -31,7 +31,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ghcr.io/${{ github.repository }}/csi-resize
+            ghcr.io/${{ github.repository }}/csi-attacher
 
       - name: Build and push csi-attacher Docker images
         uses: docker/build-push-action@v2
