@@ -31,8 +31,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            my-docker-hub-namespace/my-docker-hub-repository
-            ghcr.io/${{ github.repository }}
+            ghcr.io/${{ github.repository }}/csi-resize:v1.3.0
 
       - name: Build and push csi-resizer Docker images
         uses: docker/build-push-action@v2
