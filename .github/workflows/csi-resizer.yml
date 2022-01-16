@@ -1,8 +1,0 @@
-      - name: Build and push csi-resizer Docker images
-        uses: docker/build-push-action@v2
-        with:
-          context: ./sig-storage
-          file: csi-resizer.Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
