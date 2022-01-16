@@ -33,11 +33,11 @@ jobs:
           images: |
             ghcr.io/${{ github.repository }}/csi-snapshotter
 
-      - name: Build and push csi-snapshotterr Docker images
+      - name: Build and push csi-snapshotter Docker images
         uses: docker/build-push-action@v2
         with:
           context: ./sig-storage
-          file: ./sig-storage/csi-snapshotterr.Dockerfile
+          file: ./sig-storage/csi-snapshotter.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
