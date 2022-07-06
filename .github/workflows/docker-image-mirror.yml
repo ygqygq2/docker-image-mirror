@@ -46,7 +46,7 @@ jobs:
           let issue_number = (ev.issues || {'number': -1})['number']
           
           if(issue_number>0){
-            const issuesResponse = await github.issues.get({
+            const issuesResponse = await github.rest.issues.get({
                 owner: '${{ env.GH_USER }}',
                 repo: '${{ env.REPO_NAME }}',
                 issue_number: issue_number
@@ -55,7 +55,7 @@ jobs:
             console.log('issues opened trigger')
           }else{
           
-            const issuesResponse = await github.issues.listForRepo({
+            const issuesResponse = await github.rest.issues.listForRepo({
                 owner: '${{ env.GH_USER }}',
                 repo: '${{ env.REPO_NAME }}',
                 state: "open",
@@ -87,7 +87,7 @@ jobs:
             }else{
               issues_body='构建进展 [https://github.com/${{ env.GH_USER }}/${{ env.REPO_NAME }}/actions/runs/${{ github.run_id }}](https://github.com/${{ env.GH_USER }}/${{ env.REPO_NAME }}/actions/runs/${{ github.run_id }})'
             }
-            const issuesComment = await github.issues.createComment({
+            const issuesComment = await github.rest.issues.createComment({
                 owner: '${{ env.GH_USER }}',
                 repo: '${{ env.REPO_NAME }}',
                 issue_number: issue_number,
@@ -136,7 +136,7 @@ jobs:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
           if (${{ steps.pullIssuesPorter.outputs.ISSUE_NUMBER }} > 0){
-            const issuesResponse =  await github.issues.update({
+            const issuesResponse =  await github.rest.issues.update({
               owner: '${{ env.GH_USER }}',
               repo: '${{ env.REPO_NAME }}',
               issue_number: ${{ steps.pullIssuesPorter.outputs.ISSUE_NUMBER }},
@@ -177,7 +177,7 @@ jobs:
             let registry = names[0]
             names=names.splice(1,5)
 
-            const issuesComment = await github.issues.createComment({
+            const issuesComment = await github.rest.issues.createComment({
                 owner: '${{ env.GH_USER }}',
                 repo: '${{ env.REPO_NAME }}',
                 issue_number: ${{ steps.pullIssuesPorter.outputs.ISSUE_NUMBER }},
@@ -185,7 +185,7 @@ jobs:
             });
             console.log("create issues comment resp:", issuesComment["status"] == 201 ? "success" : "failed" )
             if(labels){
-              await github.issues.addLabels({
+              await github.rest.issues.addLabels({
                 owner: '${{ env.GH_USER }}',
                 repo: '${{ env.REPO_NAME }}',
                 issue_number: ${{ steps.pullIssuesPorter.outputs.ISSUE_NUMBER }},
