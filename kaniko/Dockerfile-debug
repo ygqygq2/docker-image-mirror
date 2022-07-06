@@ -1,5 +1,0 @@
-FROM gcr.io/kaniko-project/executor:debug
-
-LABEL maintainer "29ygq@sina.com"
-
-

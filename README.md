@@ -1,27 +1,12 @@
-# fuck_cnfw_docker
-docker纯翻墙
+# 镜像仓库转换
 
-## kubernetes docker
-* [metrics-server](https://github.com/kubernetes-incubator/metrics-server)
-k8s.gcr.io/metrics-server-amd64
+Uses/如何拉取新镜像
+-------
+[创建issues](https://github.com/ygqygq2/docker-image-mirror/issues/new?assignees=&labels=porter&template=image-porter.md&title=%5BPORTER%5D) ,将自动触发 github actions 进行拉取转推到docker hub
 
-## tiller
-gcr.io/kubernetes-helm/tiller
+>** 注意：**
+>为了防止被滥用，目前仅仅支持一次同步一个镜像
+>Issues 必须带 `porter` label
+>**标题必须为 `[PORTER]镜像名:tag` 的格式，** 例如`[PORTER]k8s.gcr.io/pause:3.6`
 
-## elasticsearch
-docker.elastic.co/elasticsearch/elasticsearch
-
-## hyperkube
-k8s.gcr.io/hyperkube
-
-## metrics-server
-gcr.io/google_containers/metrics-server-amd64
-
-## halyard
-gcr.io/spinnaker-marketplace/halyard
-
-## kaniko
-gcr.io/kaniko-project/executor
-
-## apache-php
-1and1internet/ubuntu-16-apache-php-7.1
+issues的内容无所谓，可以为空
