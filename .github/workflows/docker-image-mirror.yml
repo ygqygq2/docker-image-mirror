@@ -1,110 +1,68 @@
 name: docker image mirror
 
-on: 
+on:
   issues:
     types: [opened]
   label:
     types: [created]
   workflow_dispatch:
 
-env:
-  REPO_NAME: ${{ github.event.repository.name }}
-  GH_USER: ${{ github.actor }}
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     outputs:
       DOCKER_IMAGE: ${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}
       SUCCESS: ${{ steps.successCheck.outputs.SUCCESS }}
-      
+
     steps:
     - name: Log in to Docker Hub
       uses: docker/login-action@v2
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
+        username: ${{ github.actor }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-      
-    - name: get porter issues
+    - name: Get porter issues
       id: pullIssuesPorter
       uses: actions/github-script@v6
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          const fs = require('fs')
-          
-          let docker_image
-          let title
-          let issues_author
-          
-          const ev = JSON.parse(
-            fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')
-          )
-          
-          let issue_number = (ev.issues || {'number': -1})['number']
-          console.log(issue_number);
-          
-          if(issue_number>0){
-            const issuesResponse = await github.rest.issues.get({
-                owner: '${{ env.GH_USER }}',
-                repo: '${{ env.REPO_NAME }}',
-                issue_number: issue_number
-            })
-            title = issuesResponse.title
-            console.log('issues opened trigger')
-          }else{
-          
-            const issuesResponse = await github.rest.issues.listForRepo({
-                owner: '${{ env.GH_USER }}',
-                repo: '${{ env.REPO_NAME }}',
-                state: "open",
-                labels: "porter",
-                sort: "created",
-                direction: "desc",
-                per_page: 1
-            });
-            console.log(issuesResponse);
+          let title = context.payload.issue.title;
+          let start = 0;
 
-            if (Array.isArray(issuesResponse["data"]) && issuesResponse["data"].length) {
-              title = issuesResponse["data"][0]["title"]
-              issue_number = issuesResponse["data"][0]["number"]
-              issues_author = issuesResponse["data"][0]["user"]["login"]
-            }
-            console.log("schedule trigger")
+          if (title.includes("[PORTER]")){
+              start = 8;
           }
-          if(issue_number>0){
-            let start = 0
-            if (title.includes("[PORTER]")){
-                start = 8
-            }
-            docker_image = title.substring(start).trim()
-            issues_body=''
-            is_error=false
-            if( docker_image.includes("@")){
-             // 不支持带摘要 k8s.gcr.io/ingress-nginx/kube-webhook-certgen:v1.1.1@sha256:64d8c73dca984af206adf9d6d7e46aa550362b1d7a01f3a0a91b20cc67868660
-             is_error=true
-             issues_body='@'+issues_author+' 拉取镜像不支持带摘要信息，请去除 @部分'
-            }else{
-              issues_body='构建进展 [https://github.com/${{ env.GH_USER }}/${{ env.REPO_NAME }}/actions/runs/${{ github.run_id }}](https://github.com/${{ env.GH_USER }}/${{ env.REPO_NAME }}/actions/runs/${{ github.run_id }})'
-            }
-            const issuesComment = await github.rest.issues.createComment({
-                owner: '${{ env.GH_USER }}',
-                repo: '${{ env.REPO_NAME }}',
-                issue_number: issue_number,
-                body: issues_body
-            });
-            console.log("create issues comment resp:", issuesComment["status"]);
-            console.log("docker_image from issues is ", docker_image,", issue_number is ",issue_number, ",issues_author is ", issues_author)
-            if(is_error){
-              core.setFailed("Error");
-            }
+
+          let docker_image = title.substring(start).trim();
+          console.log(context.payload);
+          let issues_author = context.payload.issue.issues_author;
+
+          let issues_body = '';
+          let is_error = false;
+
+          if( docker_image.includes("@")){
+            is_error = true;
+            issues_body = '@' + issues_author +' 拉取镜像不支持带摘要信息，请去除 @部分'
           }else{
+            issues_body = `构建进展，详见 [构建任务](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${{github.run_id}})`
+          }
+
+          const issuesComment = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: issues_body
+          });
+          console.log("create issues comment resp:", issuesComment["status"]);
+
+          if(is_error){
+            core.setFailed("Error");
+          }else if (!docker_image){
             core.setFailed("No Images");
           }
-          core.setOutput('DOCKER_IMAGE', docker_image)
-          core.setOutput('ISSUE_NUMBER', issue_number)
+          core.setOutput('DOCKER_IMAGE', docker_image);
 
     - name: Retrieve transfer image name
       run: |
@@ -112,7 +70,7 @@ jobs:
         echo "::set-output name=MY_DOCKER_IMAGE_NAME::${{ secrets.DOCKER_USERNAME }}/$(echo ${DOCKER_IMAGE#*/} | sed "s@/@.@g;s@ @\n@g;")"
       id: transferImage
 
-    - name: pull image and push to docker hub 
+    - name: Pull image and push to docker hub
       shell: bash
       run: |
         docker pull ${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}
@@ -121,7 +79,7 @@ jobs:
         docker tag ${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }} ${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }}
         docker push ${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }}
 
-    - name: success check
+    - name: Success check
       id: successCheck
       uses: actions/github-script@v6
       if: ${{ success() }}
@@ -129,7 +87,7 @@ jobs:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
           core.setOutput('SUCCESS', true)
-      
+
     - name: Close Porter Issues
       id: closePorterIssues
       uses: actions/github-script@v6
@@ -137,61 +95,51 @@ jobs:
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          if (${{ steps.pullIssuesPorter.outputs.ISSUE_NUMBER }} > 0){
-            const issuesResponse =  await github.rest.issues.update({
-              owner: '${{ env.GH_USER }}',
-              repo: '${{ env.REPO_NAME }}',
-              issue_number: ${{ steps.pullIssuesPorter.outputs.ISSUE_NUMBER }},
-              state: 'closed'
-            })
-            console.log("update issues resp:", issuesResponse["status"] == 200 ? "success" : "failed" )
-            let body = "转换失败,详见 [构建任务](https://github.com/${{ env.GH_USER }}/${{ env.REPO_NAME }}/actions/runs/${{ github.run_id }})"
-            let success = String(${{ steps.successCheck.outputs.SUCCESS }}).toLowerCase() == "true"
-            console.log("is success?", success)
-            let labels = []
-            if(success){
-              body = "转换完成 <br/>\n```bash \n#原镜像\n${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}\n\n\n#转换后镜像\n${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }}\n\n\n```"
-              labels=['success']
-            }else{
-              const jobsResponse =  await github.actions.listJobsForWorkflowRun({
-                owner: '${{ env.GH_USER }}',
-                repo: '${{ env.REPO_NAME }}',
-                run_id: ${{ github.run_id }}
-              })
-              console.log("jobs",jobsResponse['data'])
-              body+="\n\n 日志:\n\n"
-              for(let job of jobsResponse['data']['jobs']){
-                  body+="- ["+job.name+"]("+job.html_url+")"
-              }
-              labels=['failed']
-            }
+          const issuesResponse =  await github.rest.issues.update({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            state: 'closed'
+          });
+          console.log("update issues resp:", issuesResponse["status"] == 200 ? "success" : "failed" );
 
-            let gcrImg = "${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}"
-            
-            let colonIndex = gcrImg.indexOf(":")
+          let body = `转换失败，详见 [构建任务](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${{github.run_id}})`;
+          let success = String(${{ steps.successCheck.outputs.SUCCESS }}).toLowerCase() == "true";
+          console.log("is success?", success);
 
-
-            if (colonIndex > 0) {
-              gcrImg = gcrImg.substr(0,colonIndex)
-            }
-
-            let names = gcrImg.split("/")
-            let registry = names[0]
-            names=names.splice(1,5)
-
-            const issuesComment = await github.rest.issues.createComment({
-                owner: '${{ env.GH_USER }}',
-                repo: '${{ env.REPO_NAME }}',
-                issue_number: ${{ steps.pullIssuesPorter.outputs.ISSUE_NUMBER }},
-                body: body
+          let labels = [];
+          if(success){
+            body = "转换完成 <br/>\n```bash \n#原镜像\n${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}\n\n\n#转换后镜像\n${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }}\n\n\n```"
+            labels=['success']
+          }else{
+            const jobsResponse = await github.request(`GET /repos/${context.repo.owner}/${context.repo.repo}/actions/runs/${{github.run_id}}/jobs`, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.run_id }}
             });
-            console.log("create issues comment resp:", issuesComment["status"] == 201 ? "success" : "failed" )
-            if(labels){
-              await github.rest.issues.addLabels({
-                owner: '${{ env.GH_USER }}',
-                repo: '${{ env.REPO_NAME }}',
-                issue_number: ${{ steps.pullIssuesPorter.outputs.ISSUE_NUMBER }},
-                labels: labels
-            });
+            console.log("jobs",jobsResponse['data']);
+            body += "\n\n 日志:\n\n";
+            for(let job of jobsResponse['data']['jobs']){
+                body += "- [" + job.name + "](" + job.html_url +")";
             }
+            labels = ['failure'];
+          }
+
+          // 创建 issues comment
+          const issuesComment = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+          });
+          console.log("create issues comment resp:", issuesComment["status"] == 201 ? "success" : "failed" );
+
+          // 更新 issues label
+          if(labels){
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: labels
+            });
           }
