@@ -3,8 +3,6 @@ name: docker image mirror
 on:
   issues:
     types: [opened]
-  label:
-    types: [created]
   workflow_dispatch:
 
 jobs:
@@ -28,7 +26,12 @@ jobs:
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          console.log(context)
+          const fs = require('fs');
+          const ev = JSON.parse(
+            fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')
+          );
+          console.log(ev);
+
           let title = context?.payload?.issue?.title;
           let start = 0;
 
