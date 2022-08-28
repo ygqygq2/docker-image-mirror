@@ -3,7 +3,6 @@ name: docker image mirror
 on:
   issues:
     types: [opened]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -26,12 +25,6 @@ jobs:
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          const fs = require('fs');
-          const ev = JSON.parse(
-            fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')
-          );
-          console.log(ev);
-
           let title = context?.payload?.issue?.title;
           let start = 0;
 
@@ -70,7 +63,7 @@ jobs:
     - name: Retrieve transfer image name
       run: |
         DOCKER_IMAGE="${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}"
-        echo "::set-output name=MY_DOCKER_IMAGE_NAME::${{ secrets.DOCKER_USERNAME }}/$(echo ${DOCKER_IMAGE#*/} | sed "s@/@.@g;s@ @\n@g;")"
+        echo "::set-output name=MY_DOCKER_IMAGE_NAME::${{ github.actor }}/$(echo ${DOCKER_IMAGE#*/} | sed "s@/@.@g;s@ @\n@g;")"
       id: transferImage
 
     - name: Pull image and push to docker hub
