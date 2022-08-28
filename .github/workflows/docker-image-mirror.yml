@@ -28,7 +28,8 @@ jobs:
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          let title = context.payload.issue.title;
+          console.log(context)
+          let title = context?.payload?.issue?.title;
           let start = 0;
 
           if (title.includes("[PORTER]")){
@@ -36,8 +37,7 @@ jobs:
           }
 
           let docker_image = title.substring(start).trim();
-          console.log(context.payload);
-          let issues_author = context.payload.issue.issues_author;
+          let issues_author = context?.payload?.issue?.user?.login;
 
           let issues_body = '';
           let is_error = false;
