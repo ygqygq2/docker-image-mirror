@@ -66,7 +66,7 @@ jobs:
     - name: Retrieve transfer image name
       run: |
         DOCKER_IMAGE="${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}"
-        echo "::set-output name=MY_DOCKER_IMAGE_NAME::${{ env.DOCKER_USERNAME }}/$(echo ${DOCKER_IMAGE#*/} | sed "s@/@.@g;s@ @\n@g;")"
+        echo "MY_DOCKER_IMAGE_NAME=${{ env.DOCKER_USERNAME }}/$(echo ${DOCKER_IMAGE#*/} | sed "s@/@.@g;s@ @\n@g;")" >> $GITHUB_OUTPUT
       id: transferImage
 
     - name: Pull image and push to docker hub
