@@ -2,6 +2,7 @@
 
 - 默认推送到本人仓库： https://hub.docker.com/u/ygqygq2
 - 如果源镜像 tag 中支持多架构，也会推送多架构镜像
+- 默认使用 skopeo 同步镜像，失败之后会使用 docker [暂不支持多架构]
 
 Uses/如何拉取新镜像
 -------
