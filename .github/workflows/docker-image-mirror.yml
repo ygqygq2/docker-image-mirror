@@ -34,12 +34,8 @@ jobs:
           // 使用 body 获取其它参数
           const body = context?.payload?.issue?.body || '';
 
-          let start = 0;
-          if (title.includes("[PORTER]")){
-              start = 8;
-          }
-
-          let docker_image = title.substring(start).trim();
+          const reg = new RegExp("\\[PORTER\\]", "g");
+          let docker_image = title.replace(reg, "").trim();
           const issues_author = context?.payload?.issue?.user?.login;
 
           // 为了防止 image 不带tag，自动添加 latest
