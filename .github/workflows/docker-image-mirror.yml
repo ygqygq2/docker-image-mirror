@@ -5,7 +5,7 @@ on:
     types: [opened]
 
 env:
-  DOCKER_USERNAME: "ygqygq2"
+  TARGET_REGISTRIES: "ygqygq2:docker.io/ygqygq2, 29ygq@sina.com:registry.cn-hangzhou.aliyuncs.com/img_mirror"
   RED: \033[1;31m
   GREEN: \033[1;32m
   YELLOW: \033[1;33m
@@ -17,10 +17,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    outputs:
-      DOCKER_IMAGE: ${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}
-      SUCCESS: ${{ steps.successCheck.outputs.SUCCESS }}
 
     steps:
       - name: Get porter issues
@@ -69,11 +65,17 @@ jobs:
             core.setOutput('DOCKER_IMAGE', docker_image);
             core.setOutput('BUILD_ARGS', body);
 
-      - name: Retrieve transfer image name
-        id: transferImage
+      - name: Set environment variables
         run: |
           DOCKER_IMAGE="${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}"
-          echo "MY_DOCKER_IMAGE_NAME=${{ env.DOCKER_USERNAME }}/$(echo ${DOCKER_IMAGE#*/} | sed "s@/@.@g;s@ @\n@g;")" >> $GITHUB_OUTPUT
+          if [[ "$DOCKER_IMAGE" == *.*/* ]]; then
+            PROCESSED_IMAGE=$(echo "$DOCKER_IMAGE" | sed 's@^[^/]*/@@' | sed 's@/@.@g')
+          else
+            PROCESSED_IMAGE=$(echo "$DOCKER_IMAGE" | sed 's@/@.@g')
+          fi
+          echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> $GITHUB_ENV
+          echo "TARGET_DOCKER_IMAGE=$PROCESSED_IMAGE" >> $GITHUB_ENV
+          echo "BUILD_ARGS=${{ steps.pullIssuesPorter.outputs.BUILD_ARGS }}" >> $GITHUB_ENV
 
       - name: Sync image
         id: syncImage
@@ -82,36 +84,47 @@ jobs:
           echo -e "${PURPLE}> 🚜 Syncing docker images ${BLANK}"
           echo -e "${YELLOW}> Using skopeo version: ${BLANK}"
           skopeo --version
+          RESULT=1
+          TARGET_REGISTRIES="${{ env.TARGET_REGISTRIES }}"
+          IFS=',' read -ra REGISTRIES <<< "$TARGET_REGISTRIES"
+          for REGISTRY in "${REGISTRIES[@]}"; do
+            USERNAME=$(echo $REGISTRY | cut -d':' -f1)
+            REPO=$(echo $REGISTRY | cut -d':' -f2)
+            TARGET_IMAGE="${REPO}/${TARGET_DOCKER_IMAGE}"
+            echo -e "${YELLOW}> 🐳 Docker source repository ${BLANK}"
+            echo -e "${YELLOW}> 📦 Transfer docker images from ${DOCKER_IMAGE} to ${TARGET_IMAGE} ${BLANK}"
 
-          echo -e "${YELLOW}> 🐳 Docker source repository ${BLANK}"
-          echo -e "${YELLOW}> 📦 Transfer docker images from ${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }} to ${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }} ${BLANK}"
+            skopeo copy -a \
+              --dest-creds=${USERNAME}:${{ secrets.DOCKER_PASSWORD }} \
+              ${BUILD_ARGS} \
+              docker://${DOCKER_IMAGE} \
+              docker://${TARGET_IMAGE} && \
+              RESULT=$((RESULT * 0)) || \
+              RESULT=$((RESULT * 1))
+          done
 
-          skopeo copy -a \
-            --dest-creds=${{ env.DOCKER_USERNAME }}:${{ secrets.DOCKER_PASSWORD }} \
-            ${{ steps.getIssueInfo.outputs.BUILD_ARGS }} \
-            docker://${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }} \
-            docker://${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }} && \
-          echo "SKOPEO_RESULT=0" >> $GITHUB_OUTPUT || \
-          echo "SKOPEO_RESULT=1" >> $GITHUB_OUTPUT
-
+          echo "SKOPEO_RESULT=${RESULT}" >> $GITHUB_OUTPUT
           echo -e "${YELLOW}> ✅ Sync is complete. See details above ${BLANK}"
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+      - name: Pull image and push to docker registries
         if: ${{ steps.syncImage.outputs.SKOPEO_RESULT == 1 }}
-        with:
-          username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Pull image and push to docker hub
         shell: bash
-        if: ${{ steps.syncImage.outputs.SKOPEO_RESULT == 1 }}
         run: |
-          echo -e "${YELLOW}> 📦 Transfer docker images from ${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }} to ${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }} ${BLANK}"
-          docker pull ${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}
-          docker images
-          docker tag ${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }} ${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }}
-          docker push ${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }}
+          TARGET_REGISTRIES="${{ env.TARGET_REGISTRIES }}"
+          IFS=',' read -ra REGISTRIES <<< "$TARGET_REGISTRIES"
+          for REGISTRY in "${REGISTRIES[@]}"; do
+            USERNAME=$(echo $REGISTRY | cut -d':' -f1)
+            REPO=$(echo $REGISTRY | cut -d':' -f2)
+            TARGET_IMAGE="${REPO}/${TARGET_DOCKER_IMAGE}"
+            echo -e "${YELLOW}> 📦 Transfer docker images from ${DOCKER_IMAGE} to ${TARGET_IMAGE} ${BLANK}"
+            docker pull ${DOCKER_IMAGE}
+            docker images
+            echo "docker tag ${DOCKER_IMAGE} ${TARGET_IMAGE}"
+            docker tag ${DOCKER_IMAGE} ${TARGET_IMAGE}
+            echo -e "${YELLOW}> Logging in to ${REPO} with username ${USERNAME} ${BLANK}"
+            echo ${{ secrets.DOCKER_PASSWORD }} | docker login ${REPO} -u ${USERNAME} --password-stdin
+            docker push ${TARGET_IMAGE}
+          done
           echo -e "${YELLOW}> ✅ Sync is complete. See details above ${BLANK}"
 
       - name: Success check
@@ -130,47 +143,65 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const issuesResponse =  await github.rest.issues.update({
+            const issuesResponse = await github.rest.issues.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               state: 'closed'
             });
-            console.log("update issues resp:", issuesResponse["status"] == 200 ? "success" : "failed" );
+            console.log("update issues resp:", issuesResponse["status"] == 200 ? "success" : "failed");
 
             let comment_body = `转换失败，详见 [构建任务](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${{github.run_id}})`;
             let success = String(${{ steps.successCheck.outputs.SUCCESS }}).toLowerCase() == "true";
             console.log("is success?", success);
 
             let labels = [];
-            if(success){
-              comment_body = "转换完成 <br/>\n```bash \n#原镜像\n${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}\n\n\n#转换后镜像\n${{ steps.transferImage.outputs.MY_DOCKER_IMAGE_NAME }}\n\n\n```"
-              labels=['success']
-            }else{
+            if (success) {
+              let targetRegistries = "${{ env.TARGET_REGISTRIES }}".split(",");
+              let dockerImage = "${{ env.DOCKER_IMAGE }}";
+              let transferImages = targetRegistries.map(registry => {
+                let [username, repo] = registry.split(":");
+                let imageName;
+                let firstSlashIndex = dockerImage.indexOf('/');
+                if (firstSlashIndex !== -1 && dockerImage.substring(0, firstSlashIndex).includes('.')) {
+                  imageName = dockerImage.substring(firstSlashIndex + 1).replace(/\//g, '.').replace(/\s+/g, '');
+                } else {
+                  imageName = dockerImage.replace(/\s+/g, '').replace(/\//g, '.');
+                }
+                return `${repo}/${imageName}`;
+              });
+
+              comment_body = "转换完成 <br/>\n```bash \n#原镜像\n${{ env.DOCKER_IMAGE }}\n\n\n#转换后镜像\n";
+              transferImages.forEach(image => {
+                comment_body += `${image}\n`;
+              });
+              comment_body += "\n\n```";
+              labels = ['success'];
+            } else {
               const jobsResponse = await github.request(`GET /repos/${context.repo.owner}/${context.repo.repo}/actions/runs/${{github.run_id}}/jobs`, {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 run_id: ${{ github.run_id }}
               });
-              console.log("jobs",jobsResponse['data']);
+              console.log("jobs", jobsResponse['data']);
               comment_body += "\n\n 日志:\n\n";
-              for(let job of jobsResponse['data']['jobs']){
-                  comment_body += "- [" + job.name + "](" + job.html_url +")";
+              for (let job of jobsResponse['data']['jobs']) {
+                comment_body += "- [" + job.name + "](" + job.html_url + ")";
               }
               labels = ['failure'];
             }
 
             // 创建 issues comment
             const issuesComment = await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: comment_body
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment_body
             });
-            console.log("create issues comment resp:", issuesComment["status"] == 201 ? "success" : "failed" );
+            console.log("create issues comment resp:", issuesComment["status"] == 201 ? "success" : "failed");
 
             // 更新 issues label
-            if(labels){
+            if (labels) {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
