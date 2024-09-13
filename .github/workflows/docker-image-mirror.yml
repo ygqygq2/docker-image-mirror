@@ -15,8 +15,11 @@ env:
   BLANK: \033[0m
 
 jobs:
-  build:
+  skopeo_sync:
     runs-on: ubuntu-latest
+    outputs:
+      DOCKER_IMAGE: ${{ steps.setEnvVars.outputs.DOCKER_IMAGE }}
+      TARGET_DOCKER_IMAGE: ${{ steps.setEnvVars.outputs.TARGET_DOCKER_IMAGE }}
 
     steps:
       - name: Get porter issues
@@ -66,6 +69,7 @@ jobs:
             core.setOutput('BUILD_ARGS', body);
 
       - name: Set environment variables
+        id: setEnvVars
         run: |
           DOCKER_IMAGE="${{ steps.pullIssuesPorter.outputs.DOCKER_IMAGE }}"
           if [[ "$DOCKER_IMAGE" == *.*/* ]]; then
@@ -73,15 +77,19 @@ jobs:
           else
             PROCESSED_IMAGE=$(echo "$DOCKER_IMAGE" | sed 's@/@.@g')
           fi
+
           echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> $GITHUB_ENV
           echo "TARGET_DOCKER_IMAGE=$PROCESSED_IMAGE" >> $GITHUB_ENV
           echo "BUILD_ARGS=${{ steps.pullIssuesPorter.outputs.BUILD_ARGS }}" >> $GITHUB_ENV
+          echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> $GITHUB_OUTPUT
+          echo "TARGET_DOCKER_IMAGE=$PROCESSED_IMAGE" >> $GITHUB_OUTPUT
+          echo "BUILD_ARGS=${{ steps.pullIssuesPorter.outputs.BUILD_ARGS }}" >> $GITHUB_OUTPUT
 
-      - name: Sync image
+      - name: Sync image with skopeo
         id: syncImage
         shell: bash
         run: |
-          echo -e "${PURPLE}> 🚜 Syncing docker images ${BLANK}"
+          echo -e "${PURPLE}> 🚜 Syncing docker images with skopeo ${BLANK}"
           echo -e "${YELLOW}> Using skopeo version: ${BLANK}"
           skopeo --version
           RESULT=1
@@ -106,40 +114,82 @@ jobs:
           echo "SKOPEO_RESULT=${RESULT}" >> $GITHUB_OUTPUT
           echo -e "${YELLOW}> ✅ Sync is complete. See details above ${BLANK}"
 
+  docker_sync:
+    runs-on: ubuntu-latest
+    needs: skopeo_sync
+    if: ${{ needs.skopeo_sync.outputs.SKOPEO_RESULT == 1 }}
+    env:
+      DOCKER_IMAGE: ${{ needs.skopeo_sync.outputs.DOCKER_IMAGE }}
+      TARGET_DOCKER_IMAGE: ${{ needs.skopeo_sync.outputs.TARGET_DOCKER_IMAGE }}
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Parse target registries
+        id: parseRegistries
+        run: |
+          TARGET_REGISTRIES="${{ env.TARGET_REGISTRIES }}"
+          IFS=',' read -ra REGISTRIES <<< "$TARGET_REGISTRIES"
+          INDEX=1
+          for REGISTRY in "${REGISTRIES[@]}"; do
+            USERNAME=$(echo $REGISTRY | cut -d':' -f1)
+            REPO=$(echo $REGISTRY | cut -d':' -f2)
+            echo "USERNAME${INDEX}=$USERNAME" >> $GITHUB_ENV
+            echo "REPO${INDEX}=$REPO" >> $GITHUB_ENV
+            INDEX=$((INDEX + 1))
+          done
+
+      - name: Login to Docker Registry 1
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.USERNAME1 }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to Docker Registry 2
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REPO2 }}
+          username: ${{ env.USERNAME2 }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
       - name: Pull image and push to docker registries
-        # if: ${{ steps.syncImage.outputs.SKOPEO_RESULT == 1 }}
         shell: bash
         run: |
           TARGET_REGISTRIES="${{ env.TARGET_REGISTRIES }}"
           IFS=',' read -ra REGISTRIES <<< "$TARGET_REGISTRIES"
+          docker pull ${DOCKER_IMAGE}
           for REGISTRY in "${REGISTRIES[@]}"; do
             USERNAME=$(echo $REGISTRY | cut -d':' -f1)
             REPO=$(echo $REGISTRY | cut -d':' -f2)
             TARGET_IMAGE="${REPO}/${TARGET_DOCKER_IMAGE}"
             echo -e "${YELLOW}> 📦 Transfer docker images from ${DOCKER_IMAGE} to ${TARGET_IMAGE} ${BLANK}"
-            docker pull ${DOCKER_IMAGE}
             docker images
             echo "docker tag ${DOCKER_IMAGE} ${TARGET_IMAGE}"
             docker tag ${DOCKER_IMAGE} ${TARGET_IMAGE}
-            echo -e "${YELLOW}> Logging in to ${REPO} with username ${USERNAME} ${BLANK}"
-            echo ${{ secrets.DOCKER_PASSWORD }} | docker login ${REPO} -u ${USERNAME} --password-stdin
             docker push ${TARGET_IMAGE}
           done
           echo -e "${YELLOW}> ✅ Sync is complete. See details above ${BLANK}"
 
+  close_issue:
+    runs-on: ubuntu-latest
+    needs: [skopeo_sync, docker_sync]
+    if: always()
+    steps:
       - name: Success check
         id: successCheck
-        uses: actions/github-script@v7
-        if: ${{ success() }}
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            core.setOutput('SUCCESS', true);
+        run: |
+          if [[ "${{ needs.skopeo_sync.result }}" == "success" || "${{ needs.docker_sync.result }}" == "success" ]]; then
+            echo "SUCCESS=true" >> $GITHUB_ENV
+          else
+            echo "SUCCESS=false" >> $GITHUB_ENV
+          fi
 
       - name: Close Porter Issues
         id: closePorterIssues
         uses: actions/github-script@v7
-        if: ${{ always() }}
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
@@ -152,13 +202,13 @@ jobs:
             console.log("update issues resp:", issuesResponse["status"] == 200 ? "success" : "failed");
 
             let comment_body = `转换失败，详见 [构建任务](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${{github.run_id}})`;
-            let success = String(${{ steps.successCheck.outputs.SUCCESS }}).toLowerCase() == "true";
+            let success = process.env.SUCCESS === "true";
             console.log("is success?", success);
 
             let labels = [];
             if (success) {
               let targetRegistries = "${{ env.TARGET_REGISTRIES }}".split(",");
-              let dockerImage = "${{ env.DOCKER_IMAGE }}";
+              let dockerImage = "${{ needs.skopeo_sync.outputs.DOCKER_IMAGE }}";
               let transferImages = targetRegistries.map(registry => {
                 let [username, repo] = registry.split(":");
                 let imageName;
@@ -171,7 +221,7 @@ jobs:
                 return `${repo}/${imageName}`;
               });
 
-              comment_body = "转换完成 <br/>\n```bash \n#原镜像\n${{ env.DOCKER_IMAGE }}\n\n\n#转换后镜像\n";
+              comment_body = "转换完成 <br/>\n```bash \n#原镜像\n${{ needs.skopeo_sync.outputs.DOCKER_IMAGE }}\n\n\n#转换后镜像\n";
               transferImages.forEach(image => {
                 comment_body += `${image}\n`;
               });
