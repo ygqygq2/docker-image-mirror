@@ -107,7 +107,7 @@ jobs:
           echo -e "${YELLOW}> ✅ Sync is complete. See details above ${BLANK}"
 
       - name: Pull image and push to docker registries
-        if: ${{ steps.syncImage.outputs.SKOPEO_RESULT == 1 }}
+        # if: ${{ steps.syncImage.outputs.SKOPEO_RESULT == 1 }}
         shell: bash
         run: |
           TARGET_REGISTRIES="${{ env.TARGET_REGISTRIES }}"
