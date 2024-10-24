@@ -93,7 +93,20 @@ jobs:
       - name: Install latest skopeo
         run: |
           echo -e "${PURPLE}> 🚜 Installing skopeo ${BLANK}"
-          sudo mkdir -p /usr/local/src/github.com/containers
+          sudo apt-get update
+          sudo apt-get install -y \
+            btrfs-progs \
+            libassuan-dev \
+            libbtrfs-dev \
+            libdevmapper-dev \
+            libgpgme-dev \
+            libgpg-error-dev \
+            go-md2man \
+            libseccomp-dev \
+            libselinux1-dev \
+            pkg-config \
+            runc \
+            uidmap
           sudo git clone https://github.com/containers/skopeo /tmp/skopeo
           cd /tmp/skopeo && sudo make bin/skopeo
           skopeo_path=$(which skopeo)
