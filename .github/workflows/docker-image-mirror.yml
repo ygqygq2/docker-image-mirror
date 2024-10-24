@@ -93,10 +93,11 @@ jobs:
       - name: Install latest skopeo
         run: |
           echo -e "${PURPLE}> 🚜 Installing skopeo ${BLANK}"
-          git clone https://github.com/containers/skopeo $GOPATH/src/github.com/containers/skopeo
-          cd $GOPATH/src/github.com/containers/skopeo && make bin/skopeo
+          sudo mkdir -p /usr/local/src/github.com/containers
+          sudo git clone https://github.com/containers/skopeo /tmp/skopeo
+          cd /tmp/skopeo && sudo make bin/skopeo
           skopeo_path=$(which skopeo)
-          sudo cp $GOPATH/src/github.com/containers/skopeo/bin/skopeo $skopeo_path
+          sudo cp /tmp/skopeo/bin/skopeo $skopeo_path
 
       - name: Sync image with skopeo
         id: syncImage
