@@ -89,6 +89,8 @@ jobs:
         id: syncImage
         shell: bash
         run: |
+          apt-get update
+          apt-get install -y skopeo          
           echo -e "${PURPLE}> 🚜 Syncing docker images with skopeo ${BLANK}"
           echo -e "${YELLOW}> Using skopeo version: ${BLANK}"
           skopeo --version
