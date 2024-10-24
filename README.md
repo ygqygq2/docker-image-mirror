@@ -1,8 +1,9 @@
 # 镜像仓库转换
 
-- 默认推送到本人仓库： https://hub.docker.com/u/ygqygq2
+- 推送到本人仓库： docker.io/ygqygq2
+- 推送到阿里云仓库： registry.cn-hangzhou.aliyuncs.com/img_mirror
 - 如果源镜像 tag 中支持多架构，也会推送多架构镜像
-- 默认使用 skopeo 同步镜像，失败之后会使用 docker [暂不支持多架构]
+- 默认使用 skopeo 同步镜像，失败之后会使用 docker
 
 如需要在大陆访问，请移步到 [mirror-images-to-harbor](https://github.com/linuxba/mirror-images-to-harbor) 提 issue 同步镜像，镜像存在本人私有仓库，公开镜像保存 5 个 tag；
 
