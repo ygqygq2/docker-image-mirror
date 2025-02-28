@@ -129,13 +129,13 @@ jobs:
             echo -e "${YELLOW}> 🐳 Docker source repository ${BLANK}"
             echo -e "${YELLOW}> 📦 Transfer docker images from ${DOCKER_IMAGE} to ${TARGET_IMAGE} ${BLANK}"
 
-            skopeo copy -a \
+            if skopeo copy -a \
               --dest-creds=${USERNAME}:${{ secrets.DOCKER_PASSWORD }} \
               ${BUILD_ARGS} \
               docker://${DOCKER_IMAGE} \
-              docker://${TARGET_IMAGE} && \
-              RESULT=$((RESULT * 0)) || \
-              RESULT=$((RESULT * 1))
+              docker://${TARGET_IMAGE}; then
+              RESULT=0
+            fi
           done
 
           echo "SKOPEO_RESULT=${RESULT}" >> $GITHUB_OUTPUT
