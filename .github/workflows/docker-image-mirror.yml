@@ -129,12 +129,16 @@ jobs:
             echo -e "${YELLOW}> 🐳 Docker source repository ${BLANK}"
             echo -e "${YELLOW}> 📦 Transfer docker images from ${DOCKER_IMAGE} to ${TARGET_IMAGE} ${BLANK}"
 
-            if skopeo copy -a \
+            skopeo copy -a \
               --dest-creds=${USERNAME}:${{ secrets.DOCKER_PASSWORD }} \
               ${BUILD_ARGS} \
               docker://${DOCKER_IMAGE} \
-              docker://${TARGET_IMAGE}; then
-              RESULT=0
+              docker://${TARGET_IMAGE}
+            if [ $? -ne 0 ]; then
+              RESULT=$((RESULT * 1))
+            else
+              RESULT=$((RESULT * 0))
+              echo -e "${RED}> ❌ Failed to transfer docker image from ${DOCKER_IMAGE} to ${TARGET_IMAGE} ${BLANK}"
             fi
           done
 
